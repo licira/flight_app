@@ -25,12 +25,13 @@ object CsvWriter {
   def writeToCsv(df: DataFrame,
                  path: String,
                  header: Boolean = true,
-                 saveMode: SaveMode = SaveMode.Overwrite): Unit = {
+                 saveMode: SaveMode = SaveMode.Overwrite): DataFrame = {
     df.coalesce(1)
       .write
       .mode(saveMode)
       .option("header", header.toString)
       .csv(path)
+    df
   }
 
   def toCsvStructure[T: Encoder : ClassTag](ds: Dataset[T]): DataFrame = {
