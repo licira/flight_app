@@ -58,7 +58,7 @@ object FlightOps {
             lastFlight = Some(flight)
           }
           LongestRun(passengerId, maxRun)
-        }
+        }.orderBy("longestRun")
     }
 
     def computesMinimumCoFlightsByPassengers(minFlights: Int): Dataset[FlightsTogether] = {

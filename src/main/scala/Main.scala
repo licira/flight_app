@@ -27,16 +27,18 @@ case class FrequentFlyerWithPassengerDetails(passengerId: Int, flightCount: Long
 object Main {
 
   def main(args: Array[String]): Unit = {
+
+    // Retrieve the arguments
+    val flightsDataPath = args(0)
+    val passengersDataPath = args(1)
+    val outputPath = if (args.length > 2) args(2) else "output/"
+
     implicit val spark: SparkSession = SparkSession.builder()
       .appName("Flight Analysis Application")
       .master("local[*]")
       .getOrCreate()
 
     import spark.implicits._
-
-    // Define the path to the flights CSV file
-    val flightsDataPath = "src/main/resources/flightData.csv"
-    val passengersDataPath = "src/main/resources/passengers.csv"
 
     // Initialize read functions
     val readFlightCsv = readCsv[Flight]
@@ -49,13 +51,13 @@ object Main {
     // Q1: Find the total number of flights for each month.
     val countFlightsByMonth: Dataset[Flight] => Dataset[FlightCount] =
       _.countFlightsByMonth()
-    val transformToFlightCountCsvStructure: Dataset[FlightCount] => DataFrame =
+    val mapToFlightCountCsvStructure: Dataset[FlightCount] => DataFrame =
       CsvWriter.toCsvStructure[FlightCount]
-    val writeFlightCount: DataFrame => DataFrame = _.writeToCsv("output/q1_flightsPerMonth")
+    val writeFlightCount: DataFrame => DataFrame = _.writeToCsv(s"${outputPath}/q1_flightsPerMonth")
 
     DataProcessor.compute[Flight](flights,
       countFlightsByMonth andThen
-        transformToFlightCountCsvStructure andThen
+        mapToFlightCountCsvStructure andThen
         writeFlightCount)
 
     // Q2: Find the names of the 100 most frequent flyers.
@@ -63,41 +65,41 @@ object Main {
       _.computeMostFrequentFlyers(100)
     val joinWithPassengers: Dataset[FrequentFlyer] => Dataset[FrequentFlyerWithPassengerDetails] =
       _.joinWithPassengers(passengers)
-    val transformToFrequentFlyerWithPassengerDetailsCsvStructure: Dataset[FrequentFlyerWithPassengerDetails] => DataFrame
+    val mapToFrequentFlyerWithPassengerDetailsCsvStructure: Dataset[FrequentFlyerWithPassengerDetails] => DataFrame
     = CsvWriter.toCsvStructure[FrequentFlyerWithPassengerDetails]
     val writeFrequentFlyerWithPassengerDetails: DataFrame => DataFrame
-    = _.writeToCsv("output/q2_mostFrequentFlyers")
+    = _.writeToCsv(s"${outputPath}/q2_mostFrequentFlyers")
 
     DataProcessor.compute[Flight](flights,
       computeMostFrequentFlyers andThen
         joinWithPassengers andThen
-        transformToFrequentFlyerWithPassengerDetailsCsvStructure andThen
+        mapToFrequentFlyerWithPassengerDetailsCsvStructure andThen
         writeFrequentFlyerWithPassengerDetails)
 
     // Q3: Find the greatest number of countries a passenger has been in without being in the UK.
     val computeLongestRunBypassingCountry: Dataset[Flight] => Dataset[LongestRun] =
       _.computeLongestRunBypassingCountry("uk")
-    val transformToLongestRunCsvStructure: Dataset[LongestRun] => DataFrame =
+    val mapToLongestRunCsvStructure: Dataset[LongestRun] => DataFrame =
       CsvWriter.toCsvStructure[LongestRun]
     val writeLongestRun: DataFrame => DataFrame =
-      _.writeToCsv("output/q3_longestRunBypassingCountry")
+      _.writeToCsv(s"${outputPath}/q3_longestRunBypassingCountry")
 
     DataProcessor.compute[Flight](flights,
       computeLongestRunBypassingCountry andThen
-        transformToLongestRunCsvStructure andThen
+        mapToLongestRunCsvStructure andThen
         writeLongestRun)
 
     // Q4: Find the passengers who have been on more than 3 flights together.
-    val computesMinimumCoFlightsByPassengers: Dataset[Flight] => Dataset[FlightsTogether] =
+    val computeMinimumCoFlightsByPassengers: Dataset[Flight] => Dataset[FlightsTogether] =
       _.computesMinimumCoFlightsByPassengers(3)
-    val transformToFlightsTogetherCsvStructure: Dataset[FlightsTogether] => DataFrame =
+    val mapToFlightsTogetherCsvStructure: Dataset[FlightsTogether] => DataFrame =
       CsvWriter.toCsvStructure[FlightsTogether]
     val writeFlightsTogether: DataFrame => DataFrame =
-      _.writeToCsv("output/q4_flightsTogether")
+      _.writeToCsv(s"${outputPath}/q4_flightsTogether")
 
     DataProcessor.compute[Flight](flights,
-      computesMinimumCoFlightsByPassengers andThen
-        transformToFlightsTogetherCsvStructure andThen
+      computeMinimumCoFlightsByPassengers andThen
+        mapToFlightsTogetherCsvStructure andThen
         writeFlightsTogether)
 
     // Q extra: Find the passengers who have been on more than N flights together within the range (from,to).
@@ -108,7 +110,7 @@ object Main {
     val toCsvStructureFlightsTogetherBetween: Dataset[FlightsTogetherBetween] => DataFrame =
       CsvWriter.toCsvStructure[FlightsTogetherBetween]
     val writeFlightsTogetherBetween: DataFrame => DataFrame =
-      _.writeToCsv("output/qextra_flightsTogetherBetween")
+      _.writeToCsv(s"${outputPath}/qextra_flightsTogetherBetween")
 
     DataProcessor.compute[Flight](flights,
       computeMinimumCoFLightsByPassengersBetweenDates andThen
