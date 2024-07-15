@@ -1,13 +1,26 @@
-import org.apache.spark.sql.{Dataset, SparkSession}
+import org.apache.spark.sql.Dataset
 import org.apache.spark.sql.functions._
 
 import java.sql.Date
 import java.text.SimpleDateFormat
 
+/**
+ * Object containing operations for processing flight data.
+ */
 object FlightOps {
 
+  /**
+   * Implicit class to add operations to Dataset[Flight].
+   * @param ds The Dataset[Flight] to be extended.
+   */
   implicit class FlightDatasetOps(ds: Dataset[Flight]) {
 
+    /**
+     * Computes the most frequent flyers.
+     *
+     * @param n The number of top frequent flyers to retrieve.
+     * @return A Dataset of FrequentFlyer representing the most frequent flyers.
+     */
     def computeMostFrequentFlyers(n: Int): Dataset[FrequentFlyer] = {
       import ds.sparkSession.implicits._
 
@@ -36,6 +49,12 @@ object FlightOps {
         .as[FlightCount]
     }
 
+    /**
+     * Computes the longest run of flights bypassing a specified country.
+     *
+     * @param country The country to be bypassed.
+     * @return A Dataset of LongestRun representing the longest run of flights bypassing the specified country.
+     */
     def computeLongestRunBypassingCountry(country: String): Dataset[LongestRun] = {
       import ds.sparkSession.implicits._
 
@@ -61,6 +80,12 @@ object FlightOps {
         }.orderBy(desc("longestRun"))
     }
 
+    /**
+     * Computes the pairs of passengers who have been on more than a specified number of flights together.
+     *
+     * @param minFlights The minimum number of flights together.
+     * @return A Dataset of FlightsTogether representing the pairs of passengers and the number of flights they were on together.
+     */
     def computesMinimumCoFlightsByPassengers(minFlights: Int): Dataset[FlightsTogether] = {
       import ds.sparkSession.implicits._
 
@@ -82,6 +107,14 @@ object FlightOps {
         .orderBy(desc("flightsTogether"))
     }
 
+    /**
+     * Computes the pairs of passengers who have been on more than a specified number of flights together within a given date range.
+     *
+     * @param minFlights The minimum number of flights together.
+     * @param from The start date of the range.
+     * @param to The end date of the range.
+     * @return A Dataset of FlightsTogetherBetween representing the pairs of passengers, the number of flights they were on together, and the date range.
+     */
     def computeMinimumCoFLightsByPassengersBetweenDates(minFlights: Int, from: Date, to: Date): Dataset[FlightsTogetherBetween] = {
       import ds.sparkSession.implicits._
 

@@ -3,9 +3,14 @@ import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructT
 
 import scala.reflect.ClassTag
 
+/**
+ * Object containing methods to read CSV files into Spark Datasets with specified schemas.
+ */
 object CsvReader {
 
-  // Define the schema for the flight CSV file
+  /**
+   * Schema for the flight CSV file.
+   */
   val flightSchema: StructType = StructType(Array(
     StructField("passengerId", IntegerType, nullable = false),
     StructField("flightId", IntegerType, nullable = false),
@@ -14,7 +19,9 @@ object CsvReader {
     StructField("date", StringType, nullable = false)
   ))
 
-  // Define the schema for the passenger CSV file
+  /**
+   * Schema for the passenger CSV file.
+   */
   val passengerSchema: StructType = StructType(Array(
     StructField("passengerId", IntegerType, nullable = false),
     StructField("firstName", StringType, nullable = false),
@@ -23,6 +30,15 @@ object CsvReader {
     StructField("gender", StringType, nullable = true)
   ))
 
+  /**
+   * Function to read a CSV file into a Spark Dataset with a specified schema.
+   *
+   * @tparam T The type of the Dataset (e.g., Flight or Passenger).
+   * @param spark The SparkSession instance.
+   * @param inputPath The path to the input CSV file.
+   * @return A Dataset of type T.
+   * @throws IllegalArgumentException if the type T is not supported.
+   */
   def readCsv[T: Encoder : ClassTag]: (SparkSession, String) => Dataset[T] = {
     (spark: SparkSession, inputPath: String) => {
       val schema = implicitly[ClassTag[T]] match {
