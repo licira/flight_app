@@ -95,7 +95,8 @@ object FlightOps {
       val flightsWithinInterval =
         ds.map { flight =>
             FlightWithParsedDate(flight.passengerId, flight.flightId, flight.from, flight.to, flight.date, stringToDate(flight.date))
-          }.filter(flight => flight.parsedDate.after(from) && flight.parsedDate.before(to))
+          }.filter(flight => (flight.parsedDate.after(from) || !flight.parsedDate.before(from)) &&
+            (flight.parsedDate.before(to) || !flight.parsedDate.after(to)))
           .map(flight => Flight(flight.passengerId, flight.flightId, flight.from, flight.to, flight.date))
 
       val joined = flightsWithinInterval.as("df1")
