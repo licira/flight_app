@@ -48,13 +48,14 @@ class FlightDatasetOpsSpec extends AnyFlatSpec with Matchers {
       Flight(2, 2, "ca", "us", "2023-02-15"),
       Flight(2, 2, "ca", "us", "2023-02-10"),
       Flight(2, 2, "us", "ca", "2023-02-01"),
+      Flight(2, 3, "us", "ca", "2023-02-20"),
       Flight(3, 3, "us", "ca", "2023-03-01"),
       Flight(3, 3, "us", "ca", "2023-03-01")).toDS()
 
     val expectedFlightsByMonth = Seq(
-      FlightCount("1", 4L),
-      FlightCount("2", 3L),
-      FlightCount("3", 2L)
+      FlightCount("1", 1L),
+      FlightCount("2", 2L),
+      FlightCount("3", 1L)
     ).toDS()
 
     val actualFlightsByMonth = flights.countFlightsByMonth()

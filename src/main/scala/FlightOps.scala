@@ -11,6 +11,7 @@ object FlightOps {
 
   /**
    * Implicit class to add operations to Dataset[Flight].
+   *
    * @param ds The Dataset[Flight] to be extended.
    */
   implicit class FlightDatasetOps(ds: Dataset[Flight]) {
@@ -43,9 +44,9 @@ object FlightOps {
       ds.withColumn("month", month($"date"))
         .withColumn("year", month($"date"))
         .groupBy("year", "month")
-        .agg(count("*").as[Long].alias("count"))
+        .agg(countDistinct("flightId").as[Long].alias("count"))
         .select("month", "count")
-        .orderBy("month")
+        .orderBy(desc("count"))
         .as[FlightCount]
     }
 
@@ -62,22 +63,32 @@ object FlightOps {
         .orderBy("passengerId", "date")
 
       flightsNotInCountry.groupByKey(_.passengerId)
-        .mapGroups { case (passengerId, flights) =>
-          var maxRun = 0
-          var currentRun = 0
-          var lastFlight: Option[Flight] = None
+        .flatMapGroups { case (passengerId, flights) =>
+          val flightList = flights.toList
 
-          flights.foreach { flight =>
-            if (lastFlight.isEmpty || flight.flightId != lastFlight.get.flightId) {
-              currentRun += 1
-              maxRun = math.max(maxRun, currentRun)
-            } else {
-              currentRun = 1
-            }
-            lastFlight = Some(flight)
-          }
-          LongestRun(passengerId, maxRun)
-        }.orderBy(desc("longestRun"))
+          //          val longestRun = flightList.foldLeft((Set.empty[String], 0, 0)) {
+          //            case ((visitedCountries, maxRun, currentRun), flight) =>
+          //              val updatedVisitedCountries = visitedCountries + flight.to
+          //
+          //              if (visitedCountries.contains(flight.to)) {
+          //                (updatedVisitedCountries, math.max(maxRun, currentRun), 1)
+          //              } else {
+          //                (updatedVisitedCountries, maxRun, currentRun + 1)
+          //              }
+          //          }._2
+          val longestRun =
+            flightList.foldLeft((0, 0, Option.empty[Flight])) {
+              case ((maxRun, currentRun, lastFlight), flight) =>
+                if (lastFlight.isEmpty || flight.flightId != lastFlight.get.flightId) {
+                  (math.max(maxRun, currentRun + 1), currentRun + 1, Some(flight))
+                } else {
+                  (maxRun, 1, Some(flight))
+                }
+            }._1
+
+          Iterator(LongestRun(passengerId, longestRun))
+        }
+        .orderBy(desc("longestRun"))
     }
 
     /**
@@ -90,6 +101,10 @@ object FlightOps {
       import ds.sparkSession.implicits._
 
       // Self-join to find pairs of passengers on the same flight
+
+
+
+
       val joined = ds.as("df1")
         .join(ds.as("df2"), $"df1.flightId" === $"df2.flightId"
           && $"df1.passengerId" < $"df2.passengerId")
@@ -111,8 +126,8 @@ object FlightOps {
      * Computes the pairs of passengers who have been on more than a specified number of flights together within a given date range.
      *
      * @param minFlights The minimum number of flights together.
-     * @param from The start date of the range.
-     * @param to The end date of the range.
+     * @param from       The start date of the range.
+     * @param to         The end date of the range.
      * @return A Dataset of FlightsTogetherBetween representing the pairs of passengers, the number of flights they were on together, and the date range.
      */
     def computeMinimumCoFLightsByPassengersBetweenDates(minFlights: Int, from: Date, to: Date): Dataset[FlightsTogetherBetween] = {
