@@ -39,13 +39,15 @@ object FlightOps {
     def countFlightsByMonth(): Dataset[FlightCount] = {
       import ds.sparkSession.implicits._
 
-      ds.withColumn("month", month($"date"))
-        .withColumn("year", month($"date"))
-        .groupBy("year", "month")
-        .agg(countDistinct("flightId").as[Long].alias("count"))
-        .select("month", "count")
-        .orderBy(desc("count"))
-        .as[FlightCount]
+      ds.map { flight =>
+          val month = flight.date.substring(0, 7) // Extract year-month part from the date
+          FlightCount(month, flight.flightId)
+        }.groupByKey(_.month)
+        .flatMapGroups { case (month, flights) =>
+          Iterator(
+            FlightCount(month.substring(5, 7).toInt.toString,
+              flights.toSet.size)) // Extract month part from the year-month
+        }.orderBy(desc("count"))
     }
 
     /**
@@ -88,23 +90,24 @@ object FlightOps {
       import ds.sparkSession.implicits._
 
       // Self-join to find pairs of passengers on the same flight
-
-
-      val joined = ds.as("df1")
-        .join(ds.as("df2"), $"df1.flightId" === $"df2.flightId"
-          && $"df1.passengerId" < $"df2.passengerId")
-        .select($"df1.passengerId".alias("passenger1"),
-          $"df2.passengerId".alias("passenger2"))
-
-      // Group by the pairs of passengers and count the number of flights together
-      joined.groupBy("passenger1", "passenger2")
-        .agg(count("*").alias("flightCount"))
-        .filter(col("flightCount") > minFlights)
-        .select(col("passenger1").as("passengerId1"),
-          col("passenger2").as("passengerId2"),
-          col("flightCount").as("flightsTogether"))
-        .as[FlightsTogether]
-        .orderBy(desc("flightsTogether"))
+      ds.groupByKey(_.flightId)
+        .flatMapGroups { case (_, flights) =>
+          val flightsList = flights.toList
+          for {
+            i <- flightsList.indices.iterator
+            j <- (i + 1) until flightsList.length
+          } yield {
+            if (flightsList(i).passengerId < flightsList(j).passengerId) {
+              (flightsList(i).passengerId, flightsList(j).passengerId)
+            }
+            else {
+              (flightsList(j).passengerId, flightsList(i).passengerId)
+            }
+          }
+        }.groupByKey(t => (t._1, t._2))
+        .mapGroups {
+          case (t, c) => FlightsTogether(t._1, t._2, c.size)
+        }.filter(_.flightsTogether > minFlights)
     }
 
     /**
@@ -124,35 +127,62 @@ object FlightOps {
         new Date(format.parse(dateStr).getTime)
       }
 
-      // Create Dataset[FlightWithParsedDate]
+      // Get flights withing dates.
       val flightsWithinInterval =
-        ds.map { flight =>
-            FlightWithParsedDate(flight.passengerId, flight.flightId, flight.from, flight.to, flight.date, stringToDate(flight.date))
-          }.filter(flight => (flight.parsedDate.after(from) || !flight.parsedDate.before(from)) &&
-            (flight.parsedDate.before(to) || !flight.parsedDate.after(to)))
-          .map(flight => Flight(flight.passengerId, flight.flightId, flight.from, flight.to, flight.date))
+        ds.flatMap { flight =>
+          val parsedDate = stringToDate(flight.date)
 
-      val joined = flightsWithinInterval.as("df1")
-        .join(ds.as("df2"), $"df1.flightId" === $"df2.flightId"
-          && $"df1.passengerId" < $"df2.passengerId")
-        .select(
-          col("df1.passengerId").as("passengerId1"),
-          col("df2.passengerId").as("passengerId2"),
-          col("df1.date"))
+          if ((parsedDate.after(from) || !parsedDate.before(from)) &&
+            (parsedDate.before(to) || !parsedDate.after(to))) {
+            Iterator.single(flight)
+          } else {
+            Iterator.empty
+          }
+        }
 
-      joined.groupBy("passengerId1", "passengerId2")
-        .agg(count("*").alias("flightCount"),
-          min("date").alias("From"),
-          max("date").alias("To"))
-        .filter(col("flightCount") > minFlights)
-        .select(col("passengerId1"),
-          col("passengerId2"),
-          col("flightCount").alias("flightsTogether"),
-          col("From"),
-          col("To")
-        )
-        .as[FlightsTogetherBetween]
-        .orderBy(desc("flightCount"))
+      // Passenger pairs from flights within dates.
+      val passengerPairs = flightsWithinInterval.groupByKey(_.flightId)
+        .flatMapGroups { case (_, flights) =>
+          val flightsList = flights.toList
+          for {
+            i <- flightsList.indices.iterator
+            j <- (i + 1) until flightsList.length
+          } yield {
+            if (flightsList(i).passengerId < flightsList(j).passengerId) {
+              (flightsList(i).passengerId, flightsList(j).passengerId, flightsList(i).date, flightsList(j).date)
+            } else {
+              (flightsList(j).passengerId, flightsList(i).passengerId, flightsList(j).date, flightsList(i).date)
+            }
+          }
+        }
+
+      // Map passenger pairs to flights that they travelled on together.
+      val passengerPairFlights = passengerPairs
+        // Group by coflyer passengers.
+        .groupByKey { case (passenger1, passenger2, _, _) => (passenger1, passenger2) }
+        .flatMapGroups { case ((passenger1, passenger2), flights) =>
+          // If passengers have been flying together more than minFlights return this information as a FlightsTogetherBetween.
+          if (flights.size > minFlights) {
+
+            // Compute the interval within which they travelled together.
+            val (minFromDate, maxToDate) =
+              flights.map(f => (stringToDate(f._3), stringToDate(f._4)))
+                .reduce { case ((minFrom, maxFrom), (minTo, maxTo)) =>
+                  (if (minFrom.before(minTo)) minFrom else minTo,
+                    if (maxFrom.after(maxTo)) maxFrom else maxTo)
+                }
+            Iterator.single(FlightsTogetherBetween(passenger1,
+              passenger2,
+              flights.size,
+              minFromDate.toString,
+              maxToDate.toString))
+          } else {
+            // Discard information if passengers haven't travelled together more than minFlights.
+            Iterator.empty
+          }
+        }
+
+      passengerPairFlights
     }
   }
 }
