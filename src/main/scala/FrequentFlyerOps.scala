@@ -7,6 +7,7 @@ object FrequentFlyerOps {
 
   /**
    * Implicit class to add operations to Dataset[FrequentFlyer].
+   *
    * @param ds The Dataset[FrequentFlyer] to be extended.
    */
   implicit class FrequentFlyerDatasetOps(ds: Dataset[FrequentFlyer]) {
@@ -20,12 +21,11 @@ object FrequentFlyerOps {
     def joinWithPassengers(passengers: Dataset[Passenger]): Dataset[FrequentFlyerWithPassengerDetails] = {
       import ds.sparkSession.implicits._
 
-      ds.as("frequentFlyer")
-        .join(passengers.as("passenger"), $"frequentFlyer.passengerId" === $"passenger.passengerId")
-        .select($"frequentFlyer.passengerId".alias("passengerId"),
-          $"frequentFlyer.flightCount".alias("flightCount"),
-          $"passenger.firstName".alias("firstName"),
-          $"passenger.lastName".alias("lastName"))
+      ds.join(passengers, Seq("passengerId"))
+        .select($"passengerId".as[Int],
+          $"flightCount".as[Long],
+          $"firstName".as[String],
+          $"lastName".as[String])
         .as[FrequentFlyerWithPassengerDetails]
     }
   }

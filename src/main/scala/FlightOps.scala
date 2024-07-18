@@ -25,12 +25,10 @@ object FlightOps {
     def computeMostFrequentFlyers(n: Int): Dataset[FrequentFlyer] = {
       import ds.sparkSession.implicits._
 
-      ds.groupBy("passengerId")
-        .count()
-        .orderBy(desc("count"))
+      ds.groupByKey(_.passengerId)
+        .mapGroups((passengerId, flights) => FrequentFlyer(passengerId, flights.size))
+        .orderBy(desc("flightCount"))
         .limit(n)
-        .select($"passengerId", $"count".as("flightCount"))
-        .as[FrequentFlyer]
     }
 
     /**
