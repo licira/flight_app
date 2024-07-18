@@ -1,4 +1,4 @@
-import CsvReader.readCsv
+import CsvReader.{flightSchema, passengerSchema, readCsv}
 import org.apache.spark.sql.{Row, SparkSession}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -15,7 +15,7 @@ class CsvReaderTest extends AnyFlatSpec with Matchers {
   import spark.implicits._
 
   "CsvReader" should "correctly read Flight CSV file" in {
-    val readFlightCsv = readCsv[Flight]
+    val readFlightCsv = readCsv[Flight](flightSchema)
 
     // Create a temporary CSV file
     val csv = createCsvFile(
@@ -36,7 +36,7 @@ class CsvReaderTest extends AnyFlatSpec with Matchers {
   }
 
   "CsvReader" should "correctly read Passenger CSV file" in {
-    val readPassengerCsv = readCsv[Passenger]
+    val readPassengerCsv = readCsv[Passenger](passengerSchema)
 
     // Create a temporary CSV file
     val csv = createCsvFile(

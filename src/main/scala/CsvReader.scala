@@ -34,19 +34,13 @@ object CsvReader {
    * Function to read a CSV file into a Spark Dataset with a specified schema.
    *
    * @tparam T The type of the Dataset (e.g., Flight or Passenger).
-   * @param spark The SparkSession instance.
+   * @param spark     The SparkSession instance.
    * @param inputPath The path to the input CSV file.
    * @return A Dataset of type T.
    * @throws IllegalArgumentException if the type T is not supported.
    */
-  def readCsv[T: Encoder : ClassTag]: (SparkSession, String) => Dataset[T] = {
+  def readCsv[T: Encoder : ClassTag](schema: StructType): (SparkSession, String) => Dataset[T] = {
     (spark: SparkSession, inputPath: String) => {
-      val schema = implicitly[ClassTag[T]] match {
-        case ct if ct.runtimeClass == classOf[Flight] => flightSchema
-        case ct if ct.runtimeClass == classOf[Passenger] => passengerSchema
-        case _ =>
-          throw new IllegalArgumentException("Unsupported type")
-      }
       spark.read
         .option("header", "true")
         .schema(schema)
