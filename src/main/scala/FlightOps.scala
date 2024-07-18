@@ -77,7 +77,7 @@ object FlightOps {
                 }
             }._2
           Iterator(LongestRun(passengerId, longestConsecutiveRunSkippingCountry))
-        }
+        }.orderBy(desc("longestRun"))
     }
 
     /**
