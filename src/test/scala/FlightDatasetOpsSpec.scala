@@ -65,22 +65,20 @@ class FlightDatasetOpsSpec extends AnyFlatSpec with Matchers {
 
   "FlightDatasetOps" should "compute longest streak of flight bypassing a given country" in {
     val flights = Seq(
-      Flight(1, 1, "us", "uk", "2023-01-01"),
-      Flight(1, 2, "uk", "ca", "2023-01-01"),
-      Flight(1, 3, "ca", "us", "2023-01-01"),
-      Flight(1, 4, "us", "ca", "2023-01-01"),
-      Flight(1, 5, "us", "de", "2023-01-01"),
-      Flight(1, 6, "de", "fr", "2023-01-01"),
-      Flight(1, 7, "fr", "uk", "2023-01-01"),
-      Flight(2, 8, "ca", "uk", "2023-02-15"),
-      Flight(2, 9, "uk", "de", "2023-02-10"),
-      Flight(2, 10, "de", "fr", "2023-02-01"),
-      Flight(3, 11, "fr", "uk", "2023-03-01"),
-      Flight(3, 12, "uk", "us", "2023-03-01")).toDS()
+      Flight(1, 1, "uk", "fr", "2023-01-01"),
+      Flight(1, 2, "fr", "us", "2023-01-01"),
+      Flight(1, 3, "us", "cn", "2023-01-01"),
+      Flight(1, 4, "cn", "uk", "2023-01-01"),
+      Flight(1, 5, "uk", "de", "2023-01-01"),
+      Flight(1, 6, "de", "uk", "2023-01-01"),
+      Flight(2, 7, "uk", "us", "2023-01-01"),
+      Flight(2, 8, "us", "us", "2023-01-01"),
+      Flight(2, 9, "us", "cn", "2023-01-01"),
+      Flight(2, 10, "cn", "uk", "2023-01-01")).toDS()
 
     val expectedLongestRuns = Seq(
-      LongestRun(1, 4),
-      LongestRun(2, 1)
+      LongestRun(1, 3),
+      LongestRun(2, 2)
     ).toDS()
 
     val actualLongestRuns = flights.computeLongestRunBypassingCountry("uk")

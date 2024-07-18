@@ -59,36 +59,25 @@ object FlightOps {
     def computeLongestRunBypassingCountry(country: String): Dataset[LongestRun] = {
       import ds.sparkSession.implicits._
 
-      val flightsNotInCountry = ds.filter($"from" =!= country && $"to" =!= country)
-        .orderBy("passengerId", "date")
-
-      flightsNotInCountry.groupByKey(_.passengerId)
+      ds.groupByKey(_.passengerId)
         .flatMapGroups { case (passengerId, flights) =>
-          val flightList = flights.toList
-
-          //          val longestRun = flightList.foldLeft((Set.empty[String], 0, 0)) {
-          //            case ((visitedCountries, maxRun, currentRun), flight) =>
-          //              val updatedVisitedCountries = visitedCountries + flight.to
-          //
-          //              if (visitedCountries.contains(flight.to)) {
-          //                (updatedVisitedCountries, math.max(maxRun, currentRun), 1)
-          //              } else {
-          //                (updatedVisitedCountries, maxRun, currentRun + 1)
-          //              }
-          //          }._2
-          val longestRun =
-            flightList.foldLeft((0, 0, Option.empty[Flight])) {
-              case ((maxRun, currentRun, lastFlight), flight) =>
-                if (lastFlight.isEmpty || flight.flightId != lastFlight.get.flightId) {
-                  (math.max(maxRun, currentRun + 1), currentRun + 1, Some(flight))
+          val longestConsecutiveRunSkippingCountry = flights.map(f => (f.from, f.to))
+            .flatMap { case (from, to) => Seq(from, to) }
+            .foldLeft((List.empty[String], 0, 0)) {
+              case ((acc, maxRun, currentRun), currentCountry) =>
+                if (acc.isEmpty || acc.last != currentCountry) {
+                  if (currentCountry != country) {
+                    val newRun = currentRun + 1
+                    (acc :+ currentCountry, math.max(maxRun, newRun), newRun)
+                  } else {
+                    (acc :+ currentCountry, maxRun, 0)
+                  }
                 } else {
-                  (maxRun, 1, Some(flight))
+                  (acc, maxRun, currentRun)
                 }
-            }._1
-
-          Iterator(LongestRun(passengerId, longestRun))
+            }._2
+          Iterator(LongestRun(passengerId, longestConsecutiveRunSkippingCountry))
         }
-        .orderBy(desc("longestRun"))
     }
 
     /**
@@ -101,8 +90,6 @@ object FlightOps {
       import ds.sparkSession.implicits._
 
       // Self-join to find pairs of passengers on the same flight
-
-
 
 
       val joined = ds.as("df1")
