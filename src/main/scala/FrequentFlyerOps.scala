@@ -1,4 +1,5 @@
 import org.apache.spark.sql.Dataset
+import org.apache.spark.sql.functions.desc
 
 /**
  * Object containing operations for processing frequent flyer data.
@@ -27,6 +28,7 @@ object FrequentFlyerOps {
           $"firstName".as[String],
           $"lastName".as[String])
         .as[FrequentFlyerWithPassengerDetails]
+        .orderBy(desc("flightCount"))
     }
   }
 }

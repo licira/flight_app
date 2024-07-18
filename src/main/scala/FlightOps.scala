@@ -152,6 +152,7 @@ object FlightOps {
           col("To")
         )
         .as[FlightsTogetherBetween]
+        .orderBy(desc("flightCount"))
     }
   }
 }
