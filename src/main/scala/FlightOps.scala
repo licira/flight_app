@@ -156,31 +156,40 @@ object FlightOps {
           }
         }
 
+      implicit val dateOrdering: Ordering[Date] = Ordering.by(_.getTime)
+
       // Map passenger pairs to flights that they travelled on together.
       val passengerPairFlights = passengerPairs
         // Group by coflyer passengers.
         .groupByKey { case (passenger1, passenger2, _, _) => (passenger1, passenger2) }
         .flatMapGroups { case ((passenger1, passenger2), flights) =>
+          val flightsList = flights.toList
           // If passengers have been flying together more than minFlights return this information as a FlightsTogetherBetween.
-          if (flights.size > minFlights) {
+          if (flightsList.size > minFlights) {
 
-            // Compute the interval within which they travelled together.
-            val (minFromDate, maxToDate) =
-              flights.map(f => (stringToDate(f._3), stringToDate(f._4)))
-                .reduce { case ((minFrom, maxFrom), (minTo, maxTo)) =>
-                  (if (minFrom.before(minTo)) minFrom else minTo,
-                    if (maxFrom.after(maxTo)) maxFrom else maxTo)
-                }
+            // Reduce function to find the minimum "from" date and the maximum "to" date directly from flights
+            val reducefc: ((Date, Date), (Date, Date)) => (Date, Date) = {
+              case ((minFrom1, maxTo1), (minFrom2, maxTo2)) =>
+                (
+                  if (minFrom1.before(minFrom2)) minFrom1 else minFrom2,
+                  if (maxTo1.after(maxTo2)) maxTo1 else maxTo2
+                )
+            }
+
+            val (minFrom, maxTo) = flightsList.map(f => (stringToDate(f._3), stringToDate(f._4)))
+              .reduce(reducefc)
+
             Iterator.single(FlightsTogetherBetween(passenger1,
               passenger2,
-              flights.size,
-              minFromDate.toString,
-              maxToDate.toString))
+              flightsList.size,
+              minFrom.toString,
+              maxTo.toString
+            ))
           } else {
             // Discard information if passengers haven't travelled together more than minFlights.
             Iterator.empty
           }
-        }
+        }.orderBy(desc("flightsTogether"))
 
       passengerPairFlights
     }
