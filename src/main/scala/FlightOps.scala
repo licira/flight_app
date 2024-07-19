@@ -156,8 +156,6 @@ object FlightOps {
           }
         }
 
-      implicit val dateOrdering: Ordering[Date] = Ordering.by(_.getTime)
-
       // Map passenger pairs to flights that they travelled on together.
       val passengerPairFlights = passengerPairs
         // Group by coflyer passengers.
