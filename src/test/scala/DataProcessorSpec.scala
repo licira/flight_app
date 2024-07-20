@@ -1,11 +1,10 @@
-import FlightOps.FlightDatasetOps
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{Dataset, SparkSession}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import java.sql.Date
 
-class FlightDatasetOpsSpec extends AnyFlatSpec with Matchers {
+class DataProcessorSpec extends AnyFlatSpec with Matchers {
 
   implicit val spark: SparkSession = SparkSession.builder()
     .appName("FlightDatasetOpsTest")
@@ -14,7 +13,9 @@ class FlightDatasetOpsSpec extends AnyFlatSpec with Matchers {
 
   import spark.implicits._
 
-  "FlightDatasetOps" should "top n most frequent flyers" in {
+  val target = DataProcessor(spark)
+
+  "DataProcessor" should "get top n most frequent flyers" in {
     val flights = Seq(
       Flight(1, 1, "us", "ca", "2023-01-01"),
       Flight(1, 1, "us", "ca", "2023-02-01"),
@@ -28,18 +29,26 @@ class FlightDatasetOpsSpec extends AnyFlatSpec with Matchers {
       Flight(4, 4, "us", "ca", "2023-03-01"),
       Flight(5, 5, "us", "ca", "2023-03-01")).toDS()
 
-    val expectedMostFrequent = Seq(
-      FrequentFlyer(1, 4L),
-      FrequentFlyer(2, 3L),
-      FrequentFlyer(3, 2L)
+    val passengers: Dataset[Passenger] = Seq(
+      Passenger(1, "Napoleon", "Gaylene"),
+      Passenger(2, "Katherin", "Shanell"),
+      Passenger(3, "Stevie", "Steven")
     ).toDS()
 
-    val actualMostFrequent = flights.computeMostFrequentFlyers(3)
+    val expectedMostFrequent = Seq(
+      FrequentFlyerWithPassengerDetails(1, 4L, "Napoleon", "Gaylene"),
+      FrequentFlyerWithPassengerDetails(2, 3L, "Katherin", "Shanell"),
+      FrequentFlyerWithPassengerDetails(3, 2L, "Stevie", "Steven")
+    ).toDS()
+
+    val actualMostFrequent = target.mostFrequentFlyers(flights,
+      passengers,
+      3)
 
     actualMostFrequent.collect() should contain theSameElementsAs expectedMostFrequent.collect()
   }
 
-  "FlightDatasetOps" should "count flights by month" in {
+  "DataProcessor" should "count flights by month" in {
     val flights = Seq(
       Flight(1, 1, "us", "ca", "2023-01-01"),
       Flight(1, 1, "us", "ca", "2023-01-01"),
@@ -58,12 +67,12 @@ class FlightDatasetOpsSpec extends AnyFlatSpec with Matchers {
       FlightCount("3", 1L)
     ).toDS()
 
-    val actualFlightsByMonth = flights.countFlightsByMonth()
+    val actualFlightsByMonth = target.countFlightsByMonth(flights)
 
     actualFlightsByMonth.collect() should contain theSameElementsAs expectedFlightsByMonth.collect()
   }
 
-  "FlightDatasetOps" should "compute longest streak of flight bypassing a given country" in {
+  "DataProcessor" should "compute longest streak of flight bypassing a given country" in {
     val flights = Seq(
       Flight(1, 1, "uk", "fr", "2023-01-01"),
       Flight(1, 2, "fr", "us", "2023-01-01"),
@@ -81,12 +90,12 @@ class FlightDatasetOpsSpec extends AnyFlatSpec with Matchers {
       LongestRun(2, 2)
     ).toDS()
 
-    val actualLongestRuns = flights.computeLongestRunBypassingCountry("uk")
+    val actualLongestRuns = target.longestRunBypassingCountry(flights, "uk")
 
     actualLongestRuns.collect() should contain theSameElementsAs expectedLongestRuns.collect()
   }
 
-  "FlightDatasetOps" should "compute flight passengers pairs that flown together a minimum amount of times" in {
+  "DataProcessor" should "compute flight passengers pairs that flown together a minimum amount of times" in {
     val flights = Seq(
       Flight(1, 1, "us", "uk", "2023-01-01"),
       Flight(2, 1, "us", "uk", "2023-01-01"),
@@ -102,12 +111,12 @@ class FlightDatasetOpsSpec extends AnyFlatSpec with Matchers {
       FlightsTogether(1, 2, 3)
     ).toDS()
 
-    val actualCoflights = flights.computesMinimumCoFlightsByPassengers(2)
+    val actualCoflights = target.minimumCoFlightsByPassengers(flights, 2)
 
     actualCoflights.collect() should contain theSameElementsAs expectedCoflights.collect()
   }
 
-  "FlightDatasetOps" should "compute flight passengers pairs that flown together a minimum amount of times in date range" in {
+  "DataProcessor" should "compute flight passengers pairs that flown together a minimum amount of times in date range" in {
     val flights = Seq(
       Flight(1, 1, "us", "uk", "2023-01-01"),
       Flight(2, 1, "us", "uk", "2023-01-01"),
@@ -131,7 +140,7 @@ class FlightDatasetOpsSpec extends AnyFlatSpec with Matchers {
     val from = Date.valueOf("2023-01-01")
     val to = Date.valueOf("2023-01-31")
 
-    val actualCoflightsBetween = flights.computeMinimumCoFLightsByPassengersBetweenDates(2, from, to)
+    val actualCoflightsBetween = target.minimumCoFLightsByPassengersBetweenDates(flights, 2, from, to)
 
     actualCoflightsBetween.collect() should contain theSameElementsAs expectedCoflightsBetween.collect()
   }

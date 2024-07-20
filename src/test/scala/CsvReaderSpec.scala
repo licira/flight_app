@@ -5,7 +5,7 @@ import org.scalatest.matchers.should.Matchers
 
 import java.io.File
 
-class CsvReaderTest extends AnyFlatSpec with Matchers {
+class CsvReaderSpec extends AnyFlatSpec with Matchers {
 
   implicit val spark: SparkSession = SparkSession.builder()
     .appName("CsvReaderTest")

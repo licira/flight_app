@@ -1,12 +1,6 @@
 import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
 import CsvReader._
-import FlightOps.FlightDatasetOps
-import FlightsTogetherBetweenOps.FlightsTogetherBetweenDatasetOps
-import FrequentFlyerOps.FrequentFlyerDatasetOps
-import FlightCountOps.FlightCountDatasetOps
-import FlightsTogetherOps.FlightsTogetherDatasetOps
-import FrequentFlyerWithPassengerDetailsOps.FrequentFlyerWithPassengerDetailsDatasetOps
-import LongestRunOps.LongestRunDatasetOps
+import CsvWriter.{flightCountColumnMappings, frequentFlyerColumnMappings, frequentFlyerWithPassengerDetailsColumnMappings, minimumCoFlightsBetweenDatesColumnMappings, minimumCoFlightsColumnMappings}
 
 import java.sql.Date
 
@@ -39,18 +33,6 @@ case class FlightCount(month: String, count: Long)
  * @param to              The end date of the date range.
  */
 case class FlightsTogetherBetween(passengerId1: Int, passengerId2: Int, flightsTogether: Long, from: String, to: String)
-
-/**
- * Case class representing a flight with a parsed date.
- *
- * @param passengerId The ID of the passenger.
- * @param flightId    The ID of the flight.
- * @param from        The departure location.
- * @param to          The arrival location.
- * @param date        The date of the flight.
- * @param parsedDate  The parsed date of the flight.
- */
-case class FlightWithParsedDate(passengerId: Int, flightId: Int, from: String, to: String, date: String, parsedDate: Date)
 
 /**
  * Case class representing the longest run of flights bypassing a specified country.
@@ -127,61 +109,42 @@ object Main {
     val flights = readFlightCsv(spark, flightsDataPath)
     val passengers = readPassengerCsv(spark, passengersDataPath)
 
+    val dataProcessor = DataProcessor(spark)
+    val csvWriter = CsvWriter.apply(spark)
+
     // Q1: Find the total number of flights for each month.
-    val countFlightsByMonth: Dataset[Flight] => Dataset[FlightCount] =
-      _.countFlightsByMonth()
-    val writeFlightsByMonth: Dataset[FlightCount] => Unit =
-      _.writeToCsv(s"${outputPath}/q1_flightsPerMonth")
-    val flightsByMonthFunc =
-      countFlightsByMonth andThen
-        writeFlightsByMonth
-    flightsByMonthFunc(flights)
+    val flightsByMonth = dataProcessor.countFlightsByMonth(flights)
+    csvWriter.writeDataset(flightsByMonth,
+      flightCountColumnMappings,
+      s"${outputPath}/q1_flightsPerMonth")
 
     // Q2: Find the names of the 100 most frequent flyers.
-    val computeMostFrequentFlyers: Dataset[Flight] => Dataset[FrequentFlyer] =
-      _.computeMostFrequentFlyers(100)
-    val joinWithPassengers: Dataset[FrequentFlyer] => Dataset[FrequentFlyerWithPassengerDetails] =
-      _.joinWithPassengers(passengers)
-    val writeMostFrequentFlyers: Dataset[FrequentFlyerWithPassengerDetails] => Unit =
-      _.writeToCsv(s"${outputPath}/q2_mostFrequentFlyers")
-    val mostFrequentFlyersFunc =
-      computeMostFrequentFlyers andThen
-        joinWithPassengers andThen
-        writeMostFrequentFlyers
-    mostFrequentFlyersFunc(flights)
+    val mostFrequentFlyers = dataProcessor.mostFrequentFlyers(flights, passengers, 100)
+    csvWriter.writeDataset(mostFrequentFlyers,
+      frequentFlyerWithPassengerDetailsColumnMappings,
+      s"${outputPath}/q2_mostFrequentFlyers")
 
     // Q3: Find the greatest number of countries a passenger has been in without being in the UK.
-    val computeLongestRunBypassingCountry: Dataset[Flight] => Dataset[LongestRun] =
-      _.computeLongestRunBypassingCountry("uk")
-    val writeLongestRunBypassingCountry: Dataset[LongestRun] => Unit =
-      _.writeToCsv(s"${outputPath}/q3_longestRunBypassingCountry")
-    val longestRunBypassingCountryFunc =
-      computeLongestRunBypassingCountry andThen
-        writeLongestRunBypassingCountry
-    longestRunBypassingCountryFunc(flights)
+    val longestRunsBypassingCountry = dataProcessor.longestRunBypassingCountry(flights, "uk")
+    csvWriter.writeDataset(longestRunsBypassingCountry,
+      frequentFlyerColumnMappings,
+      s"${outputPath}/q3_longestRunBypassingCountry")
 
     // Q4: Find the passengers who have been on more than 3 flights together.
-    val computeMinimumCoFlightsByPassengers: Dataset[Flight] => Dataset[FlightsTogether] =
-      _.computesMinimumCoFlightsByPassengers(3)
-    val writeFlightsTogether: Dataset[FlightsTogether] => Unit =
-      _.writeToCsv(s"${outputPath}/q4_flightsTogether")
-    val minimumCoFlightsByPassengersFunc =
-      computeMinimumCoFlightsByPassengers andThen
-        writeFlightsTogether
-    minimumCoFlightsByPassengersFunc(flights)
+    val minimumCoFlightsByPassengers = dataProcessor.minimumCoFlightsByPassengers(flights, 3)
+    csvWriter.writeDataset(minimumCoFlightsByPassengers,
+      minimumCoFlightsColumnMappings,
+      s"${outputPath}/q4_flightsTogether")
 
     // Q extra: Find the passengers who have been on more than N flights together within the range (from,to).
     val from = Date.valueOf("2017-01-01")
     val to = Date.valueOf("2017-12-31")
 
-    val computeMinimumCoFLightsByPassengersBetweenDates: Dataset[Flight] => Dataset[FlightsTogetherBetween] =
-      _.computeMinimumCoFLightsByPassengersBetweenDates(5, from, to)
-    val writeFlightsTogetherBetween2: Dataset[FlightsTogetherBetween] => Unit =
-      _.writeToCsv(s"${outputPath}/qextra_flightsTogetherBetween")
-    val minimumCoFLightsByPassengersBetweenDatesFunc =
-      computeMinimumCoFLightsByPassengersBetweenDates andThen
-        writeFlightsTogetherBetween2
-    minimumCoFLightsByPassengersBetweenDatesFunc(flights)
+    val minimumCoFLightsByPassengersBetweenDates =
+      dataProcessor.minimumCoFLightsByPassengersBetweenDates(flights, 5, from, to)
+    csvWriter.writeDataset(minimumCoFLightsByPassengersBetweenDates,
+      minimumCoFlightsBetweenDatesColumnMappings,
+      s"${outputPath}/qextra_flightsTogetherBetween")
 
     // Stop the SparkSession
     spark.stop()
