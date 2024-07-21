@@ -1,4 +1,4 @@
-import DataProcessor.stringToDate
+import DataProcessor.{generatePassengerPairs, reducefc, stringToDate}
 import org.apache.spark.sql.{Dataset, SparkSession}
 import org.apache.spark.sql.functions._
 
@@ -51,11 +51,11 @@ class DataProcessor(spark: SparkSession) {
         val month = flight.date.substring(0, 7) // Extract year-month part from the date
         FlightCount(month, flight.flightId)
       }.groupByKey(_.month)
-      .flatMapGroups { case (month, flights) =>
-        Iterator(
+      .flatMapGroups((month, flights) =>
+        Iterator.single(
           FlightCount(month.substring(5, 7).toInt.toString,
-            flights.toSet.size)) // Extract month part from the year-month
-      }.orderBy(desc("count"))
+            flights.toSet.size))) // Extract month part from the year-month
+      .orderBy(desc("count"))
   }
 
   /**
@@ -101,22 +101,10 @@ class DataProcessor(spark: SparkSession) {
                                    minFlights: Int): Dataset[FlightsTogether] = {
     import flights.sparkSession.implicits._
 
-    // Self-join to find pairs of passengers on the same flight
+    // Self-join equivalent operation to find pairs of passengers on the same flight
     flights.groupByKey(_.flightId)
-      .flatMapGroups { case (_, flights) =>
-        val flightsList = flights.toList
-        for {
-          i <- flightsList.indices.iterator
-          j <- (i + 1) until flightsList.length
-        } yield {
-          if (flightsList(i).passengerId < flightsList(j).passengerId) {
-            (flightsList(i).passengerId, flightsList(j).passengerId)
-          }
-          else {
-            (flightsList(j).passengerId, flightsList(i).passengerId)
-          }
-        }
-      }.groupByKey(t => (t._1, t._2))
+      .flatMapGroups((_, flights) => generatePassengerPairs(flights))
+      .groupByKey(t => (t._1, t._2))
       .mapGroups {
         case (t, c) => FlightsTogether(t._1, t._2, c.size)
       }.filter(_.flightsTogether > minFlights)
@@ -162,15 +150,6 @@ class DataProcessor(spark: SparkSession) {
         // If passengers have been flying together more than minFlights return this information as a FlightsTogetherBetween.
         if (flightsList.size > minFlights) {
 
-          // Reduce function to find the minimum "from" date and the maximum "to" date directly from flights
-          val reducefc: ((Date, Date), (Date, Date)) => (Date, Date) = {
-            case ((minFrom1, maxTo1), (minFrom2, maxTo2)) =>
-              (
-                if (minFrom1.before(minFrom2)) minFrom1 else minFrom2,
-                if (maxTo1.after(maxTo2)) maxTo1 else maxTo2
-              )
-          }
-
           val (minFrom, maxTo) = flightsList.map(f => (stringToDate(f._3), stringToDate(f._4)))
             .reduce(reducefc)
 
@@ -208,28 +187,62 @@ class DataProcessor(spark: SparkSession) {
     import flights.sparkSession.implicits._
 
     flights.groupByKey(_.flightId)
-      .flatMapGroups { case (_, flights) =>
-        val flightsList = flights.toList
-        for {
-          i <- flightsList.indices.iterator
-          j <- (i + 1) until flightsList.length
-        } yield {
-          if (flightsList(i).passengerId < flightsList(j).passengerId) {
-            (flightsList(i).passengerId, flightsList(j).passengerId, flightsList(i).date, flightsList(j).date)
-          } else {
-            (flightsList(j).passengerId, flightsList(i).passengerId, flightsList(j).date, flightsList(i).date)
-          }
-        }
-      }
+      .flatMapGroups((_, flights) => generatePassengerPairs(flights))
   }
 }
 
+/**
+ * Companion object for DataProcessor class.
+ */
 object DataProcessor {
+
+  /**
+   * Creates a new instance of DataProcessor.
+   *
+   * @param spark The SparkSession used for processing.
+   * @return A new instance of DataProcessor.
+   */
   def apply(spark: SparkSession): DataProcessor = new DataProcessor(spark)
 
-  // Helper function to convert String to java.sql.Date
+  /**
+   * Helper function to convert a String to java.sql.Date.
+   *
+   * @param dateStr The date string to convert.
+   * @return The converted java.sql.Date.
+   */
   private def stringToDate(dateStr: String): Date = {
     val format = new SimpleDateFormat("yyyy-MM-dd")
     new Date(format.parse(dateStr).getTime)
+  }
+
+  /**
+   * Generates pairs of passenger IDs and their corresponding dates.
+   *
+   * @param flights An iterator of flights for a specific flight ID.
+   * @return An iterator of tuples containing passenger pairs and their dates.
+   */
+  private def generatePassengerPairs(flights: Iterator[Flight]): Iterator[(Int, Int, String, String)] = {
+    val flightsBuffer = flights.toBuffer
+    for {
+      i <- flightsBuffer.indices.iterator
+      j <- (i + 1) until flightsBuffer.length
+    } yield {
+      if (flightsBuffer(i).passengerId < flightsBuffer(j).passengerId) {
+        (flightsBuffer(i).passengerId, flightsBuffer(j).passengerId, flightsBuffer(i).date, flightsBuffer(j).date)
+      } else {
+        (flightsBuffer(j).passengerId, flightsBuffer(i).passengerId, flightsBuffer(j).date, flightsBuffer(i).date)
+      }
+    }
+  }
+
+  /**
+   * Reduce function to find the minimum "from" date and the maximum "to" date directly from flights.
+   */
+  private val reducefc: ((Date, Date), (Date, Date)) => (Date, Date) = {
+    case ((minFrom1, maxTo1), (minFrom2, maxTo2)) =>
+      (
+        if (minFrom1.before(minFrom2)) minFrom1 else minFrom2,
+        if (maxTo1.after(maxTo2)) maxTo1 else maxTo2
+      )
   }
 }
